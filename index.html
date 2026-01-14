@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Parking Jam - Quad Color Edition</title>
+    <style>
+        :root {
+            --primary-blue: rgba(128, 128, 128, 0.5);
+            --road-black: #000000;
+        }
+
+        body {
+            margin: 0; padding: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; height: 100vh;
+            background: #222; 
+            font-family: 'Arial Black', sans-serif; 
+            overflow: hidden; color: white; touch-action: none;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('backg.png') no-repeat;
+            background-size: 100% 100%;
+            transform: scale(1.05); 
+            z-index: -1;
+            transition: filter 0.8s ease; 
+            filter: blur(0px); 
+        }
+
+        body.blurred::before { filter: blur(8px); }
+
+        #home-screen {
+            position: absolute; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.3); 
+            display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; z-index: 20; cursor: pointer;
+        }
+
+        #home-screen h1 { 
+            font-size: 60px; margin: 0; line-height: 0.9;
+            text-shadow: 4px 4px 10px rgba(0,0,0,0.8);
+            text-align: center; color: white;
+            z-index: 25;
+        }
+
+        /* FIXED 4-CAR CROSS FORMATION */
+        #logo-container { 
+            position: relative;
+            width: 300px; height: 450px;
+            margin: 20px 0; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-car {
+            position: absolute;
+            width: 70px; /* Slightly smaller to prevent overlap */
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+        }
+
+        /* Top car facing Up */
+        .car-top { 
+            top: 20px; 
+            transform: rotate(0deg); 
+        }
+        /* Bottom car facing Down */
+        .car-bottom { 
+            bottom: 20px; 
+            transform: rotate(180deg); 
+        }
+        /* Left car facing Left */
+        .car-left { 
+            left: 20px; 
+            transform: rotate(-90deg); 
+        }
+        /* Right car facing Right */
+        .car-right { 
+            right: 20px; 
+            transform: rotate(90deg); 
+        }
+
+        @keyframes heroBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+        .tap-to-play { 
+            font-size: 22px; font-weight: bold; letter-spacing: 2px; 
+            padding: 18px 50px; border-radius: 50px;
+            animation: pulse 1.5s infinite;
+            z-index: 25;
+        }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        canvas {
+            background-color: var(--road-black); 
+            border: 8px solid #555;
+            border-radius: 20px; 
+            box-shadow: 0 0 50px rgba(0,0,0,0.9);
+            max-width: 95vw; max-height: 85vh; display: none; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="home-screen" onclick="startGame()">
+        <h1>PARKING<br>JAM</h1>
+        <div id="logo-container">
+            <img src="CRed.png" class="logo-car car-top" alt="Car">
+            <img src="CBlue.png" class="logo-car car-bottom" alt="Car">
+            <img src="CGreen.png" class="logo-car car-left" alt="Car">
+            <img src="CYellow.png" class="logo-car car-right" alt="Car">
+        </div>
+        <div class="tap-to-play">TAP TO START</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        let globalCarSpeed = 10;
+        let difficultyFactor = 0.6;
+        let score = 0; // Added Score Variable
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const homeScreen = document.getElementById('home-screen');
+
+        const carImgs = {
+            red: new Image(),
+            blue: new Image(),
+            green: new Image(),
+            yellow: new Image()
+        };
+        carImgs.red.src = 'CRed.png';
+        carImgs.blue.src = 'CBlue.png';
+        carImgs.green.src = 'CGreen.png';
+        carImgs.yellow.src = 'CYellow.png';
+
+        const moveSnd = new Audio('move.mp3');
+        const hornSnd = new Audio('horn.wav');
+
+        const gridSize = 70;
+        const roadOffset = 100; 
+        const carWidth = 70;
+
+        let level = 1;
+        let cars = [];
+        let gameActive = false;
+        let cols = 6; 
+        let rows = 6;
+
+        // Score logic function
+        function addScore(points) {
+            score += points;
+            console.log("Score Updated: " + score);
+        }
+
+        class Car {
+            constructor(gridX, gridY, length, orientation, type, direction) {
+                this.gridX = gridX; this.gridY = gridY;
+                this.length = length; this.orientation = orientation;
+                this.type = type; 
+                this.img = carImgs[type];
+                this.x = gridX * gridSize + roadOffset;
+                this.y = gridY * gridSize + roadOffset;
+                this.status = 'parked'; 
+                this.speed = globalCarSpeed;
+                this.shakeOffset = 0;
+                this.direction = direction;
+
+                if (this.orientation === 'h') {
+                    this.angle = (this.direction === 1) ? 0 : Math.PI;
+                } else {
+                    this.angle = (this.direction === 1) ? Math.PI/2 : -Math.PI/2;
+                }
+                this.updateVectors();
+            }
+
+            updateVectors() { this.moveDir = { x: Math.cos(this.angle), y: Math.sin(this.angle) }; }
+
+            draw() {
+                if (this.status === 'removed') return;
+                ctx.save();
+                const centerX = this.x + (this.orientation === 'h' ? (this.length * gridSize)/2 : gridSize/2);
+                const centerY = this.y + (this.orientation === 'v' ? (this.length * gridSize)/2 : gridSize/2);
+                ctx.translate(centerX + (this.orientation === 'h' ? this.shakeOffset : 0), centerY + (this.orientation === 'v' ? this.shakeOffset : 0));
+                ctx.rotate(this.angle + Math.PI/2);
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = 12;
+                ctx.drawImage(this.img, -carWidth/2, -((this.length * gridSize)-10)/2, carWidth, (this.length * gridSize)-10);
+                ctx.restore();
+            }
+
+            update() {
+                if (this.status === 'parked') return;
+                if (this.status === 'approach') {
+                    this.x += this.moveDir.x * this.speed;
+                    this.y += this.moveDir.y * this.speed;
+                    const trigger = roadOffset / 1.5;
+                    if (this.angle === 0 && this.x > canvas.width - roadOffset - trigger) this.startTurn();
+                    else if (this.angle === Math.PI && this.x < trigger) this.startTurn();
+                    else if (this.angle === Math.PI/2 && this.y > canvas.height - roadOffset - trigger) this.startTurn();
+                    else if (this.angle === -Math.PI/2 && this.y < trigger) this.startTurn();
+                } else if (this.status === 'turning') {
+                    if (Math.abs(this.angle - this.targetAngle) > 0.1) {
+                        this.angle -= 0.22; this.updateVectors();
+                        this.x += this.moveDir.x * this.speed; this.y += this.moveDir.y * this.speed;
+                    } else {
+                        this.angle = this.targetAngle; this.updateVectors(); this.status = 'exiting';
+                    }
+                } else if (this.status === 'exiting') {
+                    this.x += this.moveDir.x * (this.speed * 1.6);
+                    this.y += this.moveDir.y * (this.speed * 1.6);
+                    if (this.x > canvas.width + 400 || this.x < -400 || this.y > canvas.height + 400 || this.y < -400) {
+                        this.status = 'removed'; 
+                        addScore(5); // Add 5 points when car exits
+                        checkLevelComplete();
+                    }
+                }
+            }
+
+            startTurn() { 
+                this.status = 'turning'; 
+                this.targetAngle = this.angle - Math.PI/2; 
+            }
+
+            isPathClear() {
+                let cx = this.gridX, cy = this.gridY;
+                if (this.direction === 1) {
+                    if (this.orientation === 'h') cx += (this.length - 1); else cy += (this.length - 1);
+                }
+                while (true) {
+                    if (this.orientation === 'h') cx += this.direction; else cy += this.direction;
+                    if (cx < 0 || cx >= cols || cy < 0 || cy >= rows) return true;
+                    if (cars.some(o => o !== this && o.status === 'parked' && 
+                        cx >= o.gridX && cx < o.gridX + (o.orientation === 'h' ? o.length : 1) && 
+                        cy >= o.gridY && cy < o.gridY + (o.orientation === 'v' ? o.length : 1))) {
+                        return false;
+                    }
+                }
+            }
+            shake() { this.shakeOffset = 7; setTimeout(() => this.shakeOffset = -7, 50); setTimeout(() => this.shakeOffset = 0, 100); }
+        }
+
+        function initLevel() {
+            cols = 6;
+            rows = Math.min(6 + (level - 1), 12);
+            canvas.width = (cols * gridSize) + (roadOffset * 2);
+            canvas.height = (rows * gridSize) + (roadOffset * 2);
+            cars = [];
+            const occupied = Array.from({ length: rows }, () => Array(cols).fill(false));
+            let maxCapacity = (cols * rows) / 2;
+            let targetCount = Math.floor(maxCapacity * difficultyFactor) + Math.min(level, 5);
+            targetCount = Math.min(targetCount, Math.floor(maxCapacity * 0.85)); 
+
+            let colorTypes = ['red', 'blue', 'green', 'yellow'];
+            let colorList = [];
+            for(let i=0; i < targetCount; i++) colorList.push(colorTypes[i % 4]);
+            colorList.sort(() => Math.random() - 0.5);
+
+            let attempts = 0;
+            while (cars.length < targetCount && attempts < 5000) {
+                attempts++;
+                const orient = Math.random() > 0.5 ? 'h' : 'v';
+                const r = Math.floor(Math.random() * rows);
+                const c = Math.floor(Math.random() * cols);
+                if (orient === 'h' && c + 1 < cols && !occupied[r][c] && !occupied[r][c+1]) {
+                    let dir = (c < cols / 2) ? -1 : 1;
+                    cars.push(new Car(c, r, 2, 'h', colorList[cars.length], dir));
+                    occupied[r][c] = true; occupied[r][c+1] = true;
+                } else if (orient === 'v' && r + 1 < rows && !occupied[r][c] && !occupied[r+1][c]) {
+                    let dir = (r < rows / 2) ? -1 : 1;
+                    cars.push(new Car(c, r, 2, 'v', colorList[cars.length], dir));
+                    occupied[r][c] = true; occupied[r+1][c] = true;
+                }
+            }
+        }
+
+        function drawGrid() {
+            ctx.fillStyle = "rgba(0,0,0,0.85)"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const mid = roadOffset / 2;
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.setLineDash([40, 30]); ctx.lineWidth = 4;
+            ctx.strokeRect(mid, mid, canvas.width - roadOffset, canvas.height - roadOffset);
+            ctx.setLineDash([]); 
+            ctx.fillStyle = "rgba(60, 60, 60, 0.95)"; 
+            ctx.fillRect(roadOffset, roadOffset, cols * gridSize, rows * gridSize);
+            ctx.strokeStyle = "#fff"; ctx.lineWidth = 6;
+            ctx.strokeRect(roadOffset, roadOffset, cols * gridSize, rows * gridSize);
+        }
+
+        function startGame() {
+            document.body.classList.add('blurred');
+            homeScreen.style.display = 'none';
+            canvas.style.display = 'block';
+            gameActive = true;
+            initLevel();
+            gameLoop();
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+            cars.forEach(car => { car.update(); car.draw(); });
+            requestAnimationFrame(gameLoop);
+        }
+
+        function checkLevelComplete() { 
+            if (cars.every(c => c.status === 'removed')) { 
+                level++; 
+                setTimeout(initLevel, 800); 
+            } 
+        }
+
+        function handleInput(e) {
+            if (!gameActive) return;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = (e.touches) ? e.touches[0].clientX : e.clientX;
+            const clientY = (e.touches) ? e.touches[0].clientY : e.clientY;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mx = (clientX - rect.left) * scaleX;
+            const my = (clientY - rect.top) * scaleY;
+            cars.forEach(car => {
+                if (car.status === 'parked') {
+                    const w = car.orientation === 'h' ? car.length * gridSize : gridSize;
+                    const h = car.orientation === 'v' ? car.length * gridSize : gridSize;
+                    if (mx > car.x && mx < car.x + w && my > car.y && my < car.y + h) {
+                        if (car.isPathClear()) { 
+                            car.status = 'approach'; 
+                            moveSnd.currentTime = 0;
+                            moveSnd.play().catch(()=>{}); 
+                        } else { 
+                            car.shake(); 
+                            hornSnd.currentTime = 0;
+                            hornSnd.play().catch(()=>{}); 
+                        }
+                    }
+                }
+            });
+        }
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
+    </script>
+</body>
+</html>
