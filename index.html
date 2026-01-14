@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Parking Jam - Quad Color Edition</title>
-<style>
+    <style>
         :root {
             --primary-blue: rgba(128, 128, 128, 0.5);
             --road-black: #000000;
@@ -15,17 +15,7 @@
             align-items: center; justify-content: center; height: 100vh;
             background: #222; 
             font-family: 'Arial Black', sans-serif; 
-            overflow: hidden; color: white; 
-            touch-action: none;
-            
-            /* FIX 1: Prevent text selection across the whole game */
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-
-            /* FIX 2: Remove the blue "tap" highlight on mobile */
-            -webkit-tap-highlight-color: transparent;
+            overflow: hidden; color: white; touch-action: none;
         }
 
         body::before {
@@ -46,11 +36,7 @@
             position: absolute; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.3); 
             display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; 
-            z-index: 20; 
-            cursor: pointer;
-            /* Ensures no blue box on the container itself */
-            -webkit-tap-highlight-color: transparent; 
+            align-items: center; justify-content: center; z-index: 20; cursor: pointer;
         }
 
         #home-screen h1 { 
@@ -58,9 +44,9 @@
             text-shadow: 4px 4px 10px rgba(0,0,0,0.8);
             text-align: center; color: white;
             z-index: 25;
-            pointer-events: none; /* Let clicks pass through text to the home-screen */
         }
 
+        /* FIXED 4-CAR CROSS FORMATION */
         #logo-container { 
             position: relative;
             width: 300px; height: 450px;
@@ -68,26 +54,42 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            pointer-events: none; /* Ignore taps on the logo images */
         }
 
         .logo-car {
             position: absolute;
-            width: 70px; 
+            width: 70px; /* Slightly smaller to prevent overlap */
             filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
         }
 
-        .car-top { top: 20px; transform: rotate(0deg); }
-        .car-bottom { bottom: 20px; transform: rotate(180deg); }
-        .car-left { left: 20px; transform: rotate(-90deg); }
-        .car-right { right: 20px; transform: rotate(90deg); }
+        /* Top car facing Up */
+        .car-top { 
+            top: 20px; 
+            transform: rotate(0deg); 
+        }
+        /* Bottom car facing Down */
+        .car-bottom { 
+            bottom: 20px; 
+            transform: rotate(180deg); 
+        }
+        /* Left car facing Left */
+        .car-left { 
+            left: 20px; 
+            transform: rotate(-90deg); 
+        }
+        /* Right car facing Right */
+        .car-right { 
+            right: 20px; 
+            transform: rotate(90deg); 
+        }
+
+        @keyframes heroBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
 
         .tap-to-play { 
             font-size: 22px; font-weight: bold; letter-spacing: 2px; 
             padding: 18px 50px; border-radius: 50px;
             animation: pulse 1.5s infinite;
             z-index: 25;
-            background: rgba(255,255,255,0.1); /* Subtle button background */
         }
 
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
@@ -98,7 +100,6 @@
             border-radius: 20px; 
             box-shadow: 0 0 50px rgba(0,0,0,0.9);
             max-width: 95vw; max-height: 85vh; display: none; cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
         }
     </style>
 </head>
@@ -192,33 +193,54 @@
                 ctx.restore();
             }
 
-            update() {
-                if (this.status === 'parked') return;
-                if (this.status === 'approach') {
-                    this.x += this.moveDir.x * this.speed;
-                    this.y += this.moveDir.y * this.speed;
-                    const trigger = roadOffset / 1.5;
-                    if (this.angle === 0 && this.x > canvas.width - roadOffset - trigger) this.startTurn();
-                    else if (this.angle === Math.PI && this.x < trigger) this.startTurn();
-                    else if (this.angle === Math.PI/2 && this.y > canvas.height - roadOffset - trigger) this.startTurn();
-                    else if (this.angle === -Math.PI/2 && this.y < trigger) this.startTurn();
-                } else if (this.status === 'turning') {
-                    if (Math.abs(this.angle - this.targetAngle) > 0.1) {
-                        this.angle -= 0.22; this.updateVectors();
-                        this.x += this.moveDir.x * this.speed; this.y += this.moveDir.y * this.speed;
-                    } else {
-                        this.angle = this.targetAngle; this.updateVectors(); this.status = 'exiting';
-                    }
-                } else if (this.status === 'exiting') {
-                    this.x += this.moveDir.x * (this.speed * 1.6);
-                    this.y += this.moveDir.y * (this.speed * 1.6);
-                    if (this.x > canvas.width + 400 || this.x < -400 || this.y > canvas.height + 400 || this.y < -400) {
-                        this.status = 'removed'; 
-                        addScore(5); // Add 5 points when car exits
-                        checkLevelComplete();
-                    }
-                }
-            }
+update() {
+    if (this.status === 'parked') return;
+
+    if (this.status === 'approach') {
+        this.x += this.moveDir.x * this.speed;
+        this.y += this.moveDir.y * this.speed;
+
+        const halfRoad = roadOffset / 2;
+
+        // Trigger turn when the "nose" of the car reaches the middle of the road
+        if (this.angle === 0) { // Moving Right
+            if (this.x + (this.length * gridSize) > canvas.width - halfRoad) this.startTurn();
+        } 
+        else if (this.angle === Math.PI) { // Moving Left
+            if (this.x < halfRoad) this.startTurn();
+        } 
+        else if (this.angle === Math.PI / 2) { // Moving Down
+            if (this.y + (this.length * gridSize) > canvas.height - halfRoad) this.startTurn();
+        } 
+        else if (this.angle === -Math.PI / 2) { // Moving Up
+            if (this.y < halfRoad) this.startTurn();
+        }
+
+    } else if (this.status === 'turning') {
+        // Rotation and movement logic
+        if (Math.abs(this.angle - this.targetAngle) > 0.1) {
+            this.angle -= 0.22; 
+            this.updateVectors();
+            this.x += this.moveDir.x * this.speed; 
+            this.y += this.moveDir.y * this.speed;
+        } else {
+            this.angle = this.targetAngle; 
+            this.updateVectors(); 
+            this.status = 'exiting';
+        }
+    } else if (this.status === 'exiting') {
+        this.x += this.moveDir.x * (this.speed * 1.6);
+        this.y += this.moveDir.y * (this.speed * 1.6);
+        
+        // Remove car when far off-screen
+        if (this.x > canvas.width + 400 || this.x < -400 || 
+            this.y > canvas.height + 400 || this.y < -400) {
+            this.status = 'removed'; 
+            addScore(5);
+            checkLevelComplete();
+        }
+    }
+}
 
             startTurn() { 
                 this.status = 'turning'; 
@@ -345,5 +367,4 @@
         canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
     </script>
 </body>
-
 </html>
