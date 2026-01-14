@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Parking Jam - Quad Color Edition</title>
-    <style>
+<style>
         :root {
             --primary-blue: rgba(128, 128, 128, 0.5);
             --road-black: #000000;
@@ -15,7 +15,17 @@
             align-items: center; justify-content: center; height: 100vh;
             background: #222; 
             font-family: 'Arial Black', sans-serif; 
-            overflow: hidden; color: white; touch-action: none;
+            overflow: hidden; color: white; 
+            touch-action: none;
+            
+            /* FIX 1: Prevent text selection across the whole game */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+
+            /* FIX 2: Remove the blue "tap" highlight on mobile */
+            -webkit-tap-highlight-color: transparent;
         }
 
         body::before {
@@ -36,7 +46,11 @@
             position: absolute; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.3); 
             display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; z-index: 20; cursor: pointer;
+            align-items: center; justify-content: center; 
+            z-index: 20; 
+            cursor: pointer;
+            /* Ensures no blue box on the container itself */
+            -webkit-tap-highlight-color: transparent; 
         }
 
         #home-screen h1 { 
@@ -44,9 +58,9 @@
             text-shadow: 4px 4px 10px rgba(0,0,0,0.8);
             text-align: center; color: white;
             z-index: 25;
+            pointer-events: none; /* Let clicks pass through text to the home-screen */
         }
 
-        /* FIXED 4-CAR CROSS FORMATION */
         #logo-container { 
             position: relative;
             width: 300px; height: 450px;
@@ -54,42 +68,26 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            pointer-events: none; /* Ignore taps on the logo images */
         }
 
         .logo-car {
             position: absolute;
-            width: 70px; /* Slightly smaller to prevent overlap */
+            width: 70px; 
             filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
         }
 
-        /* Top car facing Up */
-        .car-top { 
-            top: 20px; 
-            transform: rotate(0deg); 
-        }
-        /* Bottom car facing Down */
-        .car-bottom { 
-            bottom: 20px; 
-            transform: rotate(180deg); 
-        }
-        /* Left car facing Left */
-        .car-left { 
-            left: 20px; 
-            transform: rotate(-90deg); 
-        }
-        /* Right car facing Right */
-        .car-right { 
-            right: 20px; 
-            transform: rotate(90deg); 
-        }
-
-        @keyframes heroBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+        .car-top { top: 20px; transform: rotate(0deg); }
+        .car-bottom { bottom: 20px; transform: rotate(180deg); }
+        .car-left { left: 20px; transform: rotate(-90deg); }
+        .car-right { right: 20px; transform: rotate(90deg); }
 
         .tap-to-play { 
             font-size: 22px; font-weight: bold; letter-spacing: 2px; 
             padding: 18px 50px; border-radius: 50px;
             animation: pulse 1.5s infinite;
             z-index: 25;
+            background: rgba(255,255,255,0.1); /* Subtle button background */
         }
 
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
@@ -100,6 +98,7 @@
             border-radius: 20px; 
             box-shadow: 0 0 50px rgba(0,0,0,0.9);
             max-width: 95vw; max-height: 85vh; display: none; cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
         }
     </style>
 </head>
@@ -346,4 +345,5 @@
         canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
     </script>
 </body>
+
 </html>
